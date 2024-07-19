@@ -1545,7 +1545,6 @@ function smtp_mail($to, $from, $data, $password = "", $body = "")
     global $CONF;
 
     $mail = new PHPMailer(true);
-    $mail->SMTPDebug = SMTP::DEBUG_SERVER;
     $mail->isSMTP();
     $mail->Host = $CONF['smtp_server'];
     $mail->SMTPAuth = true;
