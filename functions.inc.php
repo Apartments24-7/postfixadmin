@@ -14,6 +14,11 @@
  * Contains re-usable code.
  */
 
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
+
+require 'vendor/autoload.php';
 
 $min_db_version = 1844;  # update (at least) before a release with the latest function numbrer in upgrade.php
 
@@ -1539,75 +1544,33 @@ function smtp_mail($to, $from, $data, $password = "", $body = "")
 {
     global $CONF;
 
-    $smtpd_server = $CONF['smtp_server'];
-    $smtpd_port = $CONF['smtp_port'];
+    $mail = new PHPMailer(true);
+    $mail->SMTPDebug = SMTP::DEBUG_SERVER;
+    $mail->isSMTP();
+    $mail->Host = $CONF['smtp_server'];
+    $mail->SMTPAuth = true;
+    $mail->Username = $from;
+    $mail->Password = $password;
+
     $smtpd_type = $CONF['smtp_type'];
-
-    $smtp_server = php_uname('n');
-    if (!empty($CONF['smtp_client'])) {
-        $smtp_server = $CONF['smtp_client'];
+    if ($smtpd_type === "tls") {
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     }
-    $errno = 0;
-    $errstr = "0";
-    $timeout = 30;
+    if ($smtpd_type === "starttls") {
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    }
 
-    if ($body != "") {
-        $maildata =
-            "To: " . $to . "\n"
-            . "From: " . $from . "\n"
-            . "Subject: " . encode_header($data) . "\n"
-            . "MIME-Version: 1.0\n"
-            . "Date: " . date('r') . "\n"
-            . "Content-Type: text/plain; charset=utf-8\n"
-            . "Content-Transfer-Encoding: 8bit\n"
-            . "\n"
-            . $body;
+    $mail->Port = $CONF['smtp_port'];
+    $mail->setFrom($from);
+    $mail->addAddress($to);
+    if ($body != "" ) {
+        $mail->Subject = encode_header($data);
+        $mail->Body = $body;
+    
     } else {
-        $maildata = $data;
-    }
-
-    $fh = @fsockopen($smtpd_server, $smtpd_port, $errno, $errstr, $timeout);
-
-    if (!$fh) {
-        error_log("fsockopen failed - errno: $errno - errstr: $errstr");
         return false;
-    } else {
-        if ($smtpd_type === "tls") {
-            enable_socket_crypto($fh);
-        }
-
-        smtp_get_response($fh);
-
-        if ($smtpd_type === "starttls") {
-            fputs($fh, "STARTTLS\r\n");
-            smtp_get_response($fh);
-            enable_socket_crypto($fh);
-        }
-
-        fputs($fh, "EHLO $smtp_server\r\n");
-        smtp_get_response($fh);
-
-        if (!empty($password)) {
-            fputs($fh, "AUTH LOGIN\r\n");
-            smtp_get_response($fh);
-            fputs($fh, base64_encode($from) . "\r\n");
-            smtp_get_response($fh);
-            fputs($fh, base64_encode($password) . "\r\n");
-            smtp_get_response($fh);
-        }
-
-        fputs($fh, "MAIL FROM:<$from>\r\n");
-        smtp_get_response($fh);
-        fputs($fh, "RCPT TO:<$to>\r\n");
-        smtp_get_response($fh);
-        fputs($fh, "DATA\r\n");
-        smtp_get_response($fh);
-        fputs($fh, "$maildata\r\n.\r\n");
-        smtp_get_response($fh);
-        fputs($fh, "QUIT\r\n");
-        smtp_get_response($fh);
-        fclose($fh);
     }
+    $mail->send();
     return true;
 }
 
